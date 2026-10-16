@@ -98,10 +98,10 @@ to get the quoted numbers back.
 | 02 | How a Write Commits — ACID & the Catalog | ★★ | 7:15 |
 | 03 | Reads, Deletes & the Two Strategies — CoW vs MoR | ★★ | 9:15 |
 | 04 | Schema & Partition Evolution | ★★ | 11:57 |
-| 05 | The Small-File Problem & Compaction | ★★ | 11:57 |
+| 05 | The Small-File Problem & Compaction | ★★ | 11:59 |
 | 06 | Snapshot & Metadata Lifecycle | ★★ | 13:29 |
 | 07 | Partitioning, Clustering & Data Skipping in Practice | ★★★ | 13:28 |
-| 08 | Cost & Performance Governance | ★★★ | 13:04 |
+| 08 | Cost & Performance Governance | ★★★ | 13:03 |
 | 09 | Concurrency, Recovery & Maintenance Automation | ★★★ | 11:34 |
 | 10 | Frontier — Spec v3: Deletion Vectors & Row Lineage | ★★★ | 14:21 |
 | 11 | Catalogs & the REST Spec — The Interop Pivot | ★★ | 12:03 |
