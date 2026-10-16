@@ -1,0 +1,6 @@
+# The compose stack is a third-party repo, fetched by `just lab-fetch`.
+_inputs/repos/
+
+.DS_Store
+__pycache__/
+*.pyc
