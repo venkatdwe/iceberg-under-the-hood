@@ -1,0 +1,25 @@
+# MinIO's images are no longer pullable from Docker Hub.
+#
+# Verified at the registry, not inferred: an anonymous pull token for
+# minio/minio and minio/mc returns 401 on the tag AND on the content digest,
+# while library/alpine and tabulario/spark-iceberg return 200 from the same
+# probe. A Docker Hub login does not lift it either, so these are gated behind
+# entitlements rather than merely requiring an account. Upstream
+# docker-spark-iceberg still names them, so the stack is broken for anyone
+# bringing it up fresh -- an existing lab only works because the images are
+# already cached.
+#
+# These are mirrors of the last freely pullable images (September 2025), both
+# AGPL-3.0, which permits redistribution. Source: https://github.com/minio/minio
+# and https://github.com/minio/mc
+#
+# Only the image names change. Everything else -- ports, volumes, env, the
+# commands every lab runs -- is upstream's, so no captured output moves.
+#
+# This file lives HERE rather than in _inputs/repos/, which is a gitignored
+# clone of somebody else's repo that `just lab-fetch` would overwrite.
+services:
+  minio:
+    image: ghcr.io/venkatdwe/minio:RELEASE.2025-09-07
+  mc:
+    image: ghcr.io/venkatdwe/mc:RELEASE.2025-09-07

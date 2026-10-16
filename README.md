@@ -132,6 +132,32 @@ Justfile                     every lab recipe
 Each reproduction directory has its own `README.md` with the measured numbers,
 the gotchas found while building it, and what could not be demonstrated.
 
+## A note on the MinIO images
+
+Upstream's compose file names `minio/minio` and `minio/mc`, and those are no
+longer pullable from Docker Hub — an anonymous pull token returns 401 on the
+tag and on the content digest alike, and a Docker Hub login does not lift it.
+Anyone bringing that stack up fresh gets two of four containers failing; an
+existing lab keeps working only because the images are already cached.
+
+So `compose.override.yml` points those two services at mirrors of the last
+freely pullable builds (September 2025):
+
+```
+ghcr.io/venkatdwe/minio:RELEASE.2025-09-07
+ghcr.io/venkatdwe/mc:RELEASE.2025-09-07
+```
+
+Only the image names differ. Ports, volumes, environment and every command the
+labs run are upstream's, so none of the numbers in the videos move — `m00-why`
+prints the same 300 / 351 / 300 it was filmed with.
+
+Both are AGPL-3.0, which permits redistribution. Source:
+[minio/minio](https://github.com/minio/minio) and
+[minio/mc](https://github.com/minio/mc). These mirrors are frozen at their
+September 2025 state and receive no updates — fine for a laptop teaching lab,
+not for anything handling real data.
+
 ## Troubleshooting
 
 **`just lab-up` succeeded but a table 404s.** Bringing the lab up can reset

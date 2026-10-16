@@ -4,6 +4,7 @@
 
 lab_dir := "_inputs/repos/docker-spark-iceberg"
 repro   := "_inputs/lab/reproductions"
+compose_files := "-f docker-compose.yml -f ../../../compose.override.yml"
 filter  := "grep -viE 'WARNING|FutureWarning|warnings.warn|DeprecationWarning|PYTHON_VERSION|SLF4J|log4j'"
 
 # show all recipes
@@ -19,16 +20,20 @@ lab-fetch:
     @test -d {{lab_dir}} || (echo "fetching the lab stack (one time)…" && \
         git clone --depth 1 https://github.com/tabular-io/docker-spark-iceberg {{lab_dir}})
 
-# bring the stack up (Spark + REST catalog + MinIO); first run pulls ~4.9GB of images
+# download the images without starting anything (~2.8GB; good before travelling)
+lab-pull: lab-fetch
+    cd {{lab_dir}} && docker compose {{compose_files}} pull
+
+# bring the stack up (Spark + REST catalog + MinIO); first run pulls ~2.8GB (4.9GB unpacked)
 lab-up: lab-fetch
-    cd {{lab_dir}} && docker compose up -d
+    cd {{lab_dir}} && docker compose {{compose_files}} up -d
     @# Coming up can reset the warehouse while the catalog keeps its entries,
     @# which leaves every affected lab printing blank numbers instead of failing.
     @scripts/reconcile_catalog.sh
 
 # tear the stack down
 lab-down:
-    cd {{lab_dir}} && docker compose down
+    cd {{lab_dir}} && docker compose {{compose_files}} down
 
 # container status
 lab-ps:
