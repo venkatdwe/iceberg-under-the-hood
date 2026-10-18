@@ -178,9 +178,15 @@ what fails.
 `AUTHORIZATION_TYPE 'none'` against this lab — without it DuckDB assumes oauth2.
 It is the single most common thing to trip over.
 
-**Byte counts differ slightly from the video.** Expected. Parquet and Avro
-writers are not byte-for-byte deterministic; file counts, row counts and skip
-percentages are stable, absolute byte sizes drift by a few bytes per run.
+**Byte counts differ slightly from the video.** Expected. File counts, row
+counts and the skip percentages in Module 07 come from counting files, so they
+are stable. Absolute byte sizes are not: Parquet and Avro writers are not
+byte-for-byte deterministic, and a file produced by *merging* others moves more
+than one produced by a plain insert — Module 05's compacted file has measured
+1422, 1423 and 1435 bytes on identical input, because `rewrite_data_files`
+merges in whatever order its tasks finish and the row order changes how well the
+columns encode. A percentage derived from a byte count inherits that, so Module
+05's "86% overhead" rounds to 85% on some runs.
 
 **Docker says it cannot connect.** Docker Desktop itself is not running —
 `open -a Docker` on macOS, then wait for the whale to settle before `just lab-up`.

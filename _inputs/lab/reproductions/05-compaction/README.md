@@ -26,8 +26,19 @@ file**. Eight commits stand in for eight minutes of a stream that never stops.
 
 ## Measured result (these become the module hooks)
 
-**Snapshot IDs regenerate on every run — never hardcode them. Everything below is
-stable, ±5 bytes on the compacted file.**
+**Snapshot IDs regenerate on every run — never hardcode them.**
+
+**The eight input files are byte-identical every run** (1223 / 1230 / 1230 / 1235 /
+1236 / 1236 / 1237 / 1237 = 9864) because the setup inserts literal values and fixed
+timestamps. **The compacted file is not.** Measured across three runs on the same data:
+1422, 1423 and 1435 bytes. `rewrite_data_files` merges the eight files in whatever
+order its tasks complete, and the row order changes how well `id` and `ts` encode, so
+the single output file moves by more than ten bytes. An earlier note here claimed ±5;
+that was one run's luck.
+
+Consequently the **overhead percentage is a rounded derivative and flips between 85%
+and 86%** at this file size. The stable claims are: 8 files, 9864 bytes, 8 rows, one
+file after compaction, 6.9x smaller, and all 8 old files still in object storage.
 
 ### 1. Eight commits, eight files
 

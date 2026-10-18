@@ -18,7 +18,32 @@
 #
 # This file lives HERE rather than in _inputs/repos/, which is a gitignored
 # clone of somebody else's repo that `just lab-fetch` would overwrite.
+# ── The Spark image is BUILT, not pulled ──────────────────────────────────
+#
+# Upstream's compose declares both `image: tabulario/spark-iceberg` and
+# `build: spark/`, and compose prefers a pullable image -- so everyone gets the
+# published one. Measured at the registry: `latest` == `3.5.5_1.8.1`, built
+# 2025-03-11, and it is the newest tag that exists (Tabular stopped publishing).
+# It carries Spark 3.5.5, Iceberg 1.8.1, pyiceberg 0.7.1.
+#
+# Upstream's own `spark/Dockerfile` pins Spark 3.5.6 and Iceberg 1.9.0, and its
+# requirements.txt pins pyiceberg 0.9.1 -- which is the environment every README
+# here documents and every video was filmed on. Two things break on the stale
+# image:
+#
+#   * a v3 write is rejected by the REST catalog with "Cannot add a snapshot:
+#     first-row-id is null" -- the 1.8.1 client omits row lineage and the
+#     fixture (now 1.10.x) enforces it, so module 10's lab cannot run at all
+#   * pyiceberg 0.7.1 raises KeyError(0) from `inspect.entries()`, so
+#     `just m01-inspect` prints an error for one of its seven tables
+#
+# Renaming the image to something that exists only locally makes compose build
+# it from that Dockerfile. The build is a one-time cost: once the tag exists,
+# `lab-up` reuses it and starts as fast as before.
 services:
+  spark-iceberg:
+    image: iceberg-lab-spark:3.5.6_1.9.0
+
   minio:
     image: ghcr.io/venkatdwe/minio:RELEASE.2025-09-07
   mc:

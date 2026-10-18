@@ -20,11 +20,17 @@ lab-fetch:
     @test -d {{lab_dir}} || (echo "fetching the lab stack (one time)…" && \
         git clone --depth 1 https://github.com/tabular-io/docker-spark-iceberg {{lab_dir}})
 
-# download the images without starting anything (~2.8GB; good before travelling)
+# fetch everything without starting anything (good before travelling)
+# Only the three registry images are pulled; the Spark one is built from
+# upstream's spark/Dockerfile -- see compose.override.yml for why.
 lab-pull: lab-fetch
-    cd {{lab_dir}} && docker compose {{compose_files}} pull
+    cd {{lab_dir}} && docker compose {{compose_files}} pull rest minio mc
+    cd {{lab_dir}} && docker compose {{compose_files}} build spark-iceberg
 
-# bring the stack up (Spark + REST catalog + MinIO); first run pulls ~2.8GB (4.9GB unpacked)
+# bring the stack up (Spark + REST catalog + MinIO)
+# First run pulls three images and BUILDS the Spark one (several minutes,
+# once) so the lab runs Iceberg 1.9.0 rather than the frozen published
+# image's 1.8.1 -- compose.override.yml records what that breaks.
 lab-up: lab-fetch
     cd {{lab_dir}} && docker compose {{compose_files}} up -d
     @# Coming up can reset the warehouse while the catalog keeps its entries,
@@ -37,7 +43,9 @@ lab-down:
 
 # container status
 lab-ps:
-    @docker ps --filter name=spark-iceberg --filter name=iceberg-rest --filter name=minio --filter name=mc --format "table {{{{.Names}}}}\t{{{{.Status}}}}"
+    @docker ps --filter name=spark-iceberg --filter name=iceberg-rest --filter name=minio --filter name=mc --format "table {{{{.Names}}\t{{{{.Status}}"
+    @# Four braces is just's escape for a literal double brace; the closing
+    @# pair needs none. The extra pair printed a stray suffix on every row.
 
 # ── Module 01 — the metadata tree ─────────────────────────────────────────
 # (re)build the clean 4-row baseline table
@@ -45,7 +53,11 @@ reset:
     docker cp {{repro}}/01-metadata-tree/01_create.sql spark-iceberg:/tmp/01_create.sql
     docker exec spark-iceberg spark-sql -f /tmp/01_create.sql
 
-# list the 9 physical files in object storage
+# list what is physically in object storage under db.events
+# NOTE this is the PREFIX, not the table. DROP TABLE leaves object storage
+# untouched, so re-running a repro accumulates the files of every past
+# incarnation here -- measured 34 data files in a prefix whose live table
+# references 2. `just meta` resolves the catalog pointer; this does not.
 files:
     docker exec mc mc ls -r minio/warehouse/db/events/
 
@@ -53,8 +65,17 @@ files:
 meta:
     #!/usr/bin/env bash
     set -euo pipefail
-    f=$(docker exec mc mc ls minio/warehouse/db/events/metadata/ | awk '{print $NF}' | grep 'metadata.json$' | sort | tail -1)
-    echo "# newest metadata.json: $f"
+    # Ask the CATALOG which metadata.json is current, rather than taking the
+    # highest-numbered file in the prefix. DROP TABLE does not purge object
+    # storage, so this prefix accumulates every past incarnation of the table:
+    # measured 42 metadata.json files from 11 dead tables, where sorting by
+    # name picked a fossil with the wrong snapshot count AND an engine version
+    # from before the image was rebuilt. The catalog pointer IS the table --
+    # which is the lesson of Module 01, so the helper should not contradict it.
+    loc=$(curl -sf http://localhost:8181/v1/namespaces/db/tables/events \
+      | python3 -c "import json,sys; print(json.load(sys.stdin)['metadata-location'])")
+    f=${loc##*/}
+    echo "# current metadata.json (per the catalog pointer): $f"
     docker exec mc mc cat "minio/warehouse/db/events/metadata/$f" | python3 -m json.tool
 
 # REPRO #1 — walk the tree: snapshots → manifest list → manifests → files
@@ -138,17 +159,37 @@ m08-cost:
 # ── table health (cross-module) ───────────────────────────────────────────
 # small-file metric: avg file size, partition skew, verdict vs the 128MB target
 health table="db.events":
+    #!/usr/bin/env bash
+    set -uo pipefail
+    # `just --list` renders this recipe as `health table="db.events"`, so typing
+    # that string back looks right -- but just passes the literal
+    # `table=db.events`, which reaches pyiceberg as a namespace and produces a
+    # twenty-line traceback ending in "Table does not exist: table=db.events".
+    # Strip the accidental prefix, then confirm the table loads before handing
+    # it to a script whose failure mode is a stack trace.
+    t='{{table}}'
+    t=${t#table=}
+    ns=${t%%.*}; tbl=${t#*.}
+    code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:8181/v1/namespaces/$ns/tables/$tbl")
+    if [ "$code" != 200 ]; then
+      echo "health: cannot load '$t' (catalog returned $code)" >&2
+      echo "        usage: just health db.events      # namespace.table, no 'table=' prefix" >&2
+      exit 1
+    fi
     docker cp {{repro}}/../tools/health.py spark-iceberg:/tmp/health.py
-    @docker exec spark-iceberg python3 /tmp/health.py {{table}} 2>&1 | {{filter}}
+    docker exec spark-iceberg python3 /tmp/health.py "$t" 2>&1 | {{filter}}
 
 # ── interactive ───────────────────────────────────────────────────────────
 # open a spark-sql prompt inside the container
+# The leading `-` ignores the exit status: quitting an interactive prompt with
+# ctrl-C returns 130, and without this `just` announces "recipe `sql` failed",
+# which reads as though the lab broke when nothing did.
 sql:
-    docker exec -it spark-iceberg spark-sql
+    -docker exec -it spark-iceberg spark-sql
 
 # open a shell in the spark container
 shell:
-    docker exec -it spark-iceberg bash
+    -docker exec -it spark-iceberg bash
 
 # REPRO #0 — add one file to a Parquet dir vs an Iceberg table: 351 rows vs 300
 m00-why:
@@ -205,4 +246,20 @@ m14-interop:
 
 # REPRO #14b — the third engine's view of that table (HOST, needs duckdb)
 m14-duckdb:
-    @cd {{repro}}/14-interop && duckdb -c ".read 03_duckdb.sql"
+    #!/usr/bin/env bash
+    # DuckDB 1.5.2 takes only an integer in `AT (VERSION => ...)` -- TAG,
+    # BRANCH and a quoted ref name are all rejected by the parser -- and a
+    # snapshot id regenerates on every run, so it cannot be committed to the
+    # file. Read `main` from the catalog and substitute it, which is exactly
+    # what the capture script did when this module was filmed.
+    set -euo pipefail
+    cd {{repro}}/14-interop
+    MAIN=$(curl -s http://localhost:8181/v1/namespaces/db/tables/interop \
+      | python3 -c "import json,sys; print(json.load(sys.stdin)['metadata']['refs']['main']['snapshot-id'])")
+    if [[ -z "${MAIN:-}" ]]; then
+      echo "could not read db.interop's main ref -- run \`just m14-interop\` first" >&2
+      exit 1
+    fi
+    sed "s/__MAIN_SNAPSHOT__/$MAIN/" 03_duckdb.sql > /tmp/m14_duckdb.sql
+    tail -3 /tmp/m14_duckdb.sql
+    duckdb -c ".read /tmp/m14_duckdb.sql"

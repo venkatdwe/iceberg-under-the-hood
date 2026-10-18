@@ -44,10 +44,17 @@ that happened to share its file. This is the number to lead with: nobody chooses
 ### Read amplification is the other side of the same coin
 
 ```
-bytes written per delete:   1,431   (vs 4,441 for copy-on-write)
+bytes written per delete:   1,430   (vs 4,441 for copy-on-write)
 delete files now live:      3   over 6 data files
 scan tasks that must merge: 3 of 6
 ```
+
+**1,430 or 1,431.** The video says 1,431; two runs on Iceberg 1.9.0 measured 1,430.
+A position-delete file embeds the full path of the data file it points into, and that
+path carries a Spark task id whose digit count varies between runs, so the file's size
+moves by a byte or two. Module 10's v2 delete behaves the same way — 1,416 on one run
+and 1,418 on another. Treat any of these within a few bytes as correct. `4,441`,
+`822x`, `833x` and `4,999` reproduce exactly, every run.
 
 Merge-on-read made the write **three times cheaper** and handed the reader a job:
 half the scan tasks now merge tombstones before returning a row, on **every query**,

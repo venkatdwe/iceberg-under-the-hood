@@ -19,8 +19,15 @@ just m14-interop
 # or manually:
 docker exec spark-iceberg spark-sql -f /tmp/14_setup.sql
 docker exec spark-iceberg python3   /tmp/14_break.py     # layers 1-4
-duckdb -c ".read 03_duckdb.sql"                          # from the HOST
+just m14-duckdb                                          # from the HOST
 ```
+
+Run the DuckDB half through the recipe, not by reading `03_duckdb.sql`
+directly: its last line pins to `main` by snapshot id, which regenerates on
+every run, so the file ships with a `__MAIN_SNAPSHOT__` placeholder that the
+recipe fills from the catalog. DuckDB 1.5.2 accepts only an integer there --
+`AT (TAG => 'main')` and `AT (BRANCH => 'main')` are parser errors -- so the
+substitution cannot be avoided by writing the SQL differently.
 
 `02_break_and_recover.py` must run against a freshly set-up table — it captures
 "the good snapshot" as whatever it finds on entry, so a second run without
