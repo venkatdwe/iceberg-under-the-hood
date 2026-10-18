@@ -14,7 +14,7 @@ screen. Three separate inserts, so there is a real history to travel across.
 
 ## Run
 ```bash
-just m09-concurrency
+just m09-concurrent
 # or manually:
 docker exec spark-iceberg spark-sql -f /tmp/09_setup.sql
 docker exec spark-iceberg python3   /tmp/09_conflict.py     # layers 1-4

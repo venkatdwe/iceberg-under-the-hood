@@ -219,6 +219,11 @@ m10-spec:
     docker cp {{repro}}/10-spec-v3/04_lineage.sql spark-iceberg:/tmp/10_lineage.sql
     @docker exec spark-iceberg spark-sql -f /tmp/10_lineage.sql 2>&1 | {{filter}} | grep -E "COMPACTION|sequence"
 
+# REPRO #10c — update 3 rows; 33 report the new sequence number, not 3
+m10-sequence:
+    docker cp {{repro}}/10-spec-v3/07_sequence.sql spark-iceberg:/tmp/10_sequence.sql
+    @docker exec spark-iceberg spark-sql -f /tmp/10_sequence.sql 2>&1 | {{filter}} | grep -E "data files|UPDATE"
+
 # REPRO #10b — turn deletion vectors on for an existing table (added-dvs = 1)
 m10-upgrade:
     docker cp {{repro}}/10-spec-v3/06_upgrade.sql spark-iceberg:/tmp/10_upgrade.sql

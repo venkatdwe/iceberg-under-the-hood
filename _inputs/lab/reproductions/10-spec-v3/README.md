@@ -13,12 +13,15 @@ because the interesting number is the size of the DELETE, not of the table.
 
 ## Run
 ```bash
-just m10-specv3
+just m10-spec       # layers 1-4, plus row lineage
+just m10-upgrade    # deletion vectors switched on for an existing table
+just m10-sequence   # the sequence-number measurement below
 # or manually:
 docker exec spark-iceberg spark-sql -f /tmp/10_setup.sql
 docker exec spark-iceberg spark-sql -f /tmp/10_delete.sql
-docker exec spark-iceberg python3   /tmp/10_measure.py     # layers 1-4
-docker exec spark-iceberg spark-sql -f /tmp/10_lineage.sql # row lineage
+docker exec spark-iceberg python3   /tmp/10_measure.py      # layers 1-4
+docker exec spark-iceberg spark-sql -f /tmp/10_lineage.sql  # row lineage
+docker exec spark-iceberg spark-sql -f /tmp/10_sequence.sql # sequence numbers
 ```
 
 ## Measured result (these become the module hooks)
@@ -107,15 +110,23 @@ An earlier note here claimed `_last_updated_sequence_number` "behaves as
 specified: 2 for an updated row, 1 for untouched ones". Measured on a fresh
 six-file v3 table, that is **not** what happens:
 
+`just m10-sequence` (`07_sequence.sql`) measures it:
+
 ```
-BEFORE UPDATE            seq 1 -> 200 rows
-UPDATE 3 rows (id <= 3)  seq 1 -> 167 rows
-                         seq 2 ->  33 rows
+data files      6
+BEFORE UPDATE   1   200
+AFTER UPDATE    1   167
+AFTER UPDATE    2    33
 ```
 
-Three rows were updated; **33 rows report the new sequence number** — one whole
-data file's worth (200 rows across 6 files). The update rewrote the file
-copy-on-write and the sequence number moved for every row in it.
+Three rows were named by the `UPDATE`; **33 rows report the new sequence
+number** — one whole data file's worth, since the 200 rows landed in 6 files.
+The update rewrote that file copy-on-write and the sequence number moved for
+every row in it.
+
+The table is left unsorted and spread across several files on purpose. On a
+single-file table both numbers would equal the row count and there would be
+nothing to see.
 
 So the sequence number tells you *"something in this file changed"*, not *"this
 row changed"* — the same file-level granularity as `_row_id`. It is directionally

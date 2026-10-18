@@ -17,7 +17,7 @@ importing an Iceberg client would undercut the claim it is making.
 
 ## Run
 ```bash
-just m11-catalogs
+just m11-catalog
 # or manually:
 docker exec spark-iceberg python3 /tmp/11_explore.py      # layers 1-4
 duckdb -c ".read 02_duckdb.sql"                            # layer 5, from the HOST
@@ -44,13 +44,18 @@ in the design.
 ### 2. Loading a table is one GET that returns one pointer
 
 ```
-GET /v1/namespaces/db/tables          -> ['clustering','concurrent','gov_cow','gov_mor']
-GET /v1/namespaces/db/tables/clustering
-  metadata-location   s3://warehouse/db/clustering/metadata/00008-....metadata.json
+GET /v1/namespaces/db/tables          ->  19 tables
+GET .../tables/catalog_demo
+  metadata-location   s3://warehouse/db/catalog_demo/metadata/00001-....metadata.json
   format-version      2
-  current-snapshot-id 1790023505614939963
-  snapshots           8
+  current-snapshot-id 1767744333096733974
+  snapshots           1
 ```
+
+The table count depends on how many of the other reproductions you have run —
+they all live in the same `db` namespace. `catalog_demo` is this module's own
+table, created by `00_setup.sql` with a single insert, so its snapshot count is
+always 1.
 
 **One URL, one pointer.** Everything else the engine needs it reads from object
 storage itself, walking the tree from Module 01. The catalog is not in the data
@@ -103,14 +108,25 @@ ATTACH 'warehouse' AS ice (TYPE iceberg,
 ```
 
 ```
-ice.db.clustering / concurrent / gov_cow / gov_mor     <- all written by Spark
+ice.db.catalog_demo / clustering / concurrent / dv_v2 / dv_v3 / events / ...
+                                                       <- all written by Spark
 
-SELECT count(*), count(DISTINCT customer_id) FROM ice.db.gov_cow;
-  rows 4999   customers 1000
+SELECT region, count(*) FROM ice.db.catalog_demo GROUP BY region ORDER BY region;
+  eu-west  100
+  us-east  100
+  us-west  100
 ```
 
-4,999 is Module 08's copy-on-write delete, seen from a different engine. "Which
-engine wrote it" stops being a question anyone has to ask.
+`SHOW ALL TABLES` lists every table the other reproductions left in the same
+namespace, and the 300 rows Spark wrote into `catalog_demo` come back split
+three ways by an engine that shares no library and no configuration with it.
+"Which engine wrote it" stops being a question anyone has to ask.
+
+An earlier version of this section queried Module 08's `db.gov_cow` and quoted
+`rows 4999  customers 1000`. That coupling is exactly what `00_setup.sql` was
+rewritten to remove — see the note at the top of that file — because a repro
+that reads another module's leftovers stops working the first time the lab is
+rebuilt.
 
 ## Notes / gotchas
 
@@ -120,12 +136,13 @@ engine wrote it" stops being a question anyone has to ask.
 - **Match the commit endpoint exactly.** Filtering the advertised list for
   `tables/{table}` returns four endpoints — the commit plus `metrics`, `plan`
   and `tasks` — and captioning all four as "the commit endpoint" is wrong.
-- **`02_duckdb.sql` reads `db.gov_cow`, not `db.concurrent`,** and that choice is
-  deliberate. `db.concurrent` has been rolled back, and DuckDB 1.5.2 resolves
-  the latest snapshot rather than the branch ref, so it reports 240 rows where
-  pyiceberg reports 340. That divergence is Module 14's headline
-  (`reproductions/14-interop/FINDINGS.md`); showing it here would contradict
-  Module 09 on screen with no explanation.
+- **`02_duckdb.sql` reads this module's own `db.catalog_demo`,** and avoiding
+  every other module's table is deliberate twice over. A repro that reads
+  another module's leftovers breaks the first time the lab is rebuilt. And
+  `db.concurrent` in particular has been rolled back, so DuckDB 1.5.2 — which
+  resolves the latest snapshot rather than the branch ref — would report 240
+  rows where pyiceberg reports 340. That divergence is Module 14's headline;
+  showing it here would contradict Module 09 on screen with no explanation.
 - DuckDB rejects `AS ""` — an empty delimited identifier is a parser error. Use
   a named alias for the section headers.
 - The advertised endpoint list includes `POST https://auth-server.com/token`, a
