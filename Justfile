@@ -1,4 +1,4 @@
-# LearningIceberg — hands-on lab runner.
+# Apache Iceberg — Under the Hood: hands-on lab runner.
 # You run these; output lands in YOUR terminal. One-time setup: `brew install just`.
 # List recipes:  just            (or  just --list)
 

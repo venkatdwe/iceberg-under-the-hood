@@ -191,6 +191,15 @@ columns encode. A percentage derived from a byte count inherits that, so Module
 **Docker says it cannot connect.** Docker Desktop itself is not running —
 `open -a Docker` on macOS, then wait for the whale to settle before `just lab-up`.
 
+## License
+
+The lab — the Justfile, the reproduction scripts and their READMEs — is MIT
+licensed; see [LICENSE](LICENSE). Run it, change it, teach from it.
+
+The two mirrored MinIO images are AGPL-3.0, as the originals are — see *A note
+on the MinIO images*. That is unaffected by this licence, which covers the lab
+in this repository only.
+
 ## Credentials
 
 The lab's MinIO uses `admin` / `password`, the documented defaults of the
